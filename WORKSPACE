@@ -224,6 +224,7 @@ pip_import(
         "//examples/checked_in_requirements_bzl:requirements-2.txt",
     ],
     requirements_bzl = "//examples/checked_in_requirements_bzl:requirements.bzl",
+    gendir = "examples/checked_in_requirements_bzl/pip",
     requirements_overrides = wheel_overrides,
     digests = True,
     python = "@python2//:bin/python",

@@ -376,42 +376,36 @@ py_binary(
     attrs += [("patch_cmds", '["%s"]' % '", "'.join(args.patch_cmds))]
   attrs += [("distribution", '"%s"' % whl.distribution().lower())]
   attrs += [("version", '"%s"' % whl.version())]
+  if args.wheel_repo:
+    attrs += [("wheel", '"@%s//:%s"' % (args.wheel_repo, whl.basename()))]
+  else:
+    attrs += [("wheel", '"%s"' % whl.basename())]
   attrs += [("wheel_size", "%s" % os.path.getsize(args.whl))]
   if args.python_version:
     attrs += [("python_version", '"%s"' % args.python_version)]
+  if external_deps:
+    deps = ''.join([
+      ('\n        "%s",' % d) if d[0] == "@" else ('\n        requirement("%s"),' % d)
+      for d in sorted(external_deps)
+    ])
+    attrs += [("deps", "[%s\n    ]" % deps)]
 
   with open(os.path.join(args.directory, 'BUILD'), 'w') as f:
-    f.write("""
-package(default_visibility = ["//visibility:public"])
-
+    f.write("""\
 load("@io_bazel_rules_python//python:python.bzl", "extract_wheel")
 load("@{repository}//:requirements.bzl", "requirement")
 
+package(default_visibility = ["//visibility:public"])
+
 extract_wheel(
-    name = "extracted",
-    wheel = "{wheel}",
-    {attrs}
-)
-
-py_library(
     name = "pkg",
-    imports = ["extracted"],
-    deps = [
-        ":extracted",{dependencies}
-    ],
+    {attrs},
 )
-
-{extras}
-{entrypoints_build}
-{contents}""".format(
-  wheel = whl.basename(),
-  repository=args.repository,
-  dependencies=''.join([
-    ('\n        "%s",' % d) if d[0] == "@" else ('\n        requirement("%s"),' % d)
-    for d in sorted(external_deps)
-  ]),
-  attrs=",\n    ".join(['{} = {}'.format(k, v) for k, v in attrs]),
-  extras='\n\n'.join([
+""".format(repository=args.repository,
+           attrs=",\n    ".join(['{} = {}'.format(k, v) for k, v in attrs]),
+    ))
+    if args.extras:
+      f.write('\n\n'.join([
     """py_library(
     name = "{extra}",
     deps = [
@@ -421,17 +415,22 @@ py_library(
             deps=','.join([
                 'requirement("%s")' % dep
                 for dep in sorted(whl.dependencies(extra))
-            ]))
-    for extra in args.extras or []
-  ]),
-  entrypoints_build=entrypoints_build,
-  contents=contents))
+              ]))
+        for extra in args.extras or []
+      ]))
+    if entrypoints_build:
+      f.write(entrypoints_build)
+    if contents:
+      f.write(contents)
 
 parser = subparsers.add_parser('genbuild', help='Extract one or more wheels as a py_library')
 parser.set_defaults(func=genbuild)
 
 parser.add_argument('--whl', action='store', required=True,
                     help=('The .whl file we are expanding.'))
+
+parser.add_argument('--wheel_repo', action='store',
+                    help=('The repository name where the .whl file is.'))
 
 parser.add_argument('--repository', action='store', required=True,
                     help='The pip_import from which to draw dependencies.')
@@ -766,6 +765,52 @@ def resolve(args):
     return """"{}": {{
         {},
     }},""".format(wheel.name(), ",\n        ".join(['"{}": {}'.format(k, v) for k, v in attrs]))
+
+  if os.path.isdir(args.output):
+    shutil.rmtree(args.output)
+    os.mkdir(args.output)
+    with open(os.path.join(args.output, "BUILD"), "w"): pass
+    for w in whls:
+      buildfile_dir = os.path.join(args.output, w.distribution().lower())
+      os.makedirs(buildfile_dir)
+      genbuild_args = argparse.Namespace(
+        directory=buildfile_dir,
+        repository=args.name,
+        whl=w.path(),
+        wheel_repo=lib_repo(w),
+        add_dependency=None,
+        drop_dependency=None,
+        add_build_content=None,
+        extras=None,
+        python_version=None,
+        patches=None,
+        patch_tool=None,
+        patch_args=None,
+        patch_cmds=None,
+      )
+      print("Generating BUILD file to %s from %s" % (buildfile_dir, w.path()))
+      genbuild(genbuild_args)
+    args.output = os.path.join(args.output, "requirements.bzl")
+
+    #args += ["--whl=%s" % wheel]
+    #args += ["--add-dependency=%s" % d for d in ctx.attr.additional_runtime_deps]
+    #args += ["--drop-dependency=%s" % d for d in ctx.attr.remove_runtime_deps]
+    #if ctx.attr.additional_build_content:
+    #    args += ["--add-build-content=%s" % ctx.path(ctx.attr.additional_build_content)]
+    #args += ["--extras=%s" % extra for extra in ctx.attr.extras]
+    #if ctx.attr.python_version:
+    #    args += ["--python-version=%s" % ctx.attr.python_version]
+    ## Add our sitecustomize.py that ensures all .pth files are run.
+    #args += ["--add-dependency=@io_bazel_rules_python//python:site"]
+    #for x in ctx.attr.patches:
+    #    args += ["--patches=@%s" % x]
+    #if ctx.attr.patch_tool:
+    #    args += ["--patch-tool=%s" % ctx.attr.patch_tool]
+    #for x in ctx.attr.patch_args:
+    #    args += ["--patch-args=%s" % x]
+    #for x in ctx.attr.patch_cmds:
+    #    args += ["--patch-cmds=%s" % x]
+
 
   with open(args.output, 'w') as f:
     f.write("""\

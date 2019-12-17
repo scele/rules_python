@@ -26,17 +26,18 @@ sh_binary(
 )
 """)
 
-  ctx.template(
-    "requirements.bzl",
-    Label("//rules_python:requirements.bzl.tpl"),
-    substitutions = {
-      "%{repo}": ctx.name,
-      "%{python}": str(ctx.attr.python) if ctx.attr.python else "",
-      "%{python_version}": ctx.attr.python_version if ctx.attr.python_version else "",
-      "%{pip_args}": ", ".join(["\"%s\"" % arg for arg in ctx.attr.pip_args]),
-      "%{additional_attributes}": ctx.attr.requirements_overrides or "{}",
-      "%{env}": ", ".join(["\"%s\"" % x for x in ctx.attr.env]),
-    })
+  if not ctx.attr.gendir:
+    ctx.template(
+        "requirements.bzl",
+        Label("//rules_python:requirements.bzl.tpl"),
+        substitutions = {
+            "%{repo}": ctx.name,
+            "%{python}": str(ctx.attr.python) if ctx.attr.python else "",
+            "%{python_version}": ctx.attr.python_version if ctx.attr.python_version else "",
+            "%{pip_args}": ", ".join(["\"%s\"" % arg for arg in ctx.attr.pip_args]),
+            "%{additional_attributes}": ctx.attr.requirements_overrides or "{}",
+            "%{env}": ", ".join(["\"%s\"" % x for x in ctx.attr.env]),
+        })
 
 
   cmd = [
@@ -53,7 +54,52 @@ sh_binary(
   ]
 
 
-  if ctx.attr.requirements_bzl:
+  if ctx.attr.gendir:
+    cmd += [
+        "--output-format=download",
+        "--directory=%s" % str(ctx.path("build-directory")),
+    ]
+    if ctx.attr.digests:
+        cmd += ["--digests"]
+
+    ctx.file(
+        "update.sh",
+        "\n".join([
+            "#!/bin/bash",
+            "set -euo pipefail",
+            "rm -rf \"%s\"" % str(ctx.path("build-directory")),
+            "'%s' --output=$BUILD_WORKSPACE_DIRECTORY/%s \"$@\"" % ("' '".join(cmd), ctx.attr.gendir),
+        ]),
+        executable = True,
+    )
+
+    ctx.file("requirements.bzl", """
+load("@//{prefix}:requirements.bzl", _wheels = "wheels")
+load(
+    "@io_bazel_rules_python//python:whl.bzl",
+    _wheel_rules = "wheel_rules",
+    _download_or_build_wheel = "download_or_build_wheel",
+)
+
+def pip_install():
+    for distribution, attributes in _wheels.items():
+        attrs = {{a: attributes.get(a, None) for a in _wheel_rules.download_or_build_wheel.attrs}}
+        attrs["name"] = attributes["name"]
+        attrs["distribution"] = distribution
+        _download_or_build_wheel(**attrs)
+
+def requirement(name, target = "pkg", binary = None):
+    # Handle extras
+    parts = name.split("[")
+    name = parts[0]
+    if len(parts) > 1:
+        target = parts[1].rstrip("]")
+    key = name.lower().replace("-", "_")
+    if binary:
+        return "//{prefix}/%s:%s" % (key, binary)
+    return "//{prefix}/%s:%s" % (key, target)
+""".format(prefix=ctx.attr.gendir, repo=ctx.attr.name))
+  elif ctx.attr.requirements_bzl:
     cmd += [
         "--output=%s" % str(ctx.path(ctx.attr.requirements_bzl)),
         "--output-format=download",
@@ -102,6 +148,7 @@ _pip_import = repository_rule(
         "requirements_bzl": attr.label(
             allow_single_file = True,
         ),
+        "gendir": attr.string(),
         "requirements_overrides": attr.string(),
         "env": attr.string_list(),
         "pip_args": attr.string_list(),

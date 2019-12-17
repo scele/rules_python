@@ -45,14 +45,14 @@ def py_test(*args, **kwargs):
   native.py_test(*args, **kwargs)
 
 def _extract_wheel_impl(ctx):
-    d = ctx.actions.declare_directory("extracted")
+    extracted = ctx.actions.declare_directory("extracted")
     command = ["BUILDDIR=$(pwd)"]
-    command += ["%s extract --whl=%s --directory=%s" % (ctx.executable._piptool.path, ctx.file.wheel.path, d.path)]
+    command += ["%s extract --whl=%s --directory=%s" % (ctx.executable._piptool.path, ctx.file.wheel.path, extracted.path)]
     inputs = [ctx.file.wheel]
-    outputs = [d]
+    outputs = [extracted]
     tools = [ctx.executable._piptool]
 
-    command += ["cd %s" % d.path]
+    command += ["cd %s" % extracted.path]
     for patchfile in ctx.files.patches:
         command += ["{patchtool} {patch_args} < $BUILDDIR/{patchfile}".format(
             patchtool = ctx.attr.patch_tool,
@@ -74,10 +74,31 @@ def _extract_wheel_impl(ctx):
         mnemonic = "ExtractWheel",
     )
 
+    has_py2_only_sources = ctx.attr.python_version == "PY2"
+    has_py3_only_sources = ctx.attr.python_version == "PY3"
+    if not has_py2_only_sources:
+        for d in ctx.attr.deps:
+            if d[PyInfo].has_py2_only_sources:
+                has_py2_only_sources = True
+                break
+    if not has_py3_only_sources:
+        for d in ctx.attr.deps:
+            if d[PyInfo].has_py3_only_sources:
+                has_py3_only_sources = True
+                break
+    if ctx.label.workspace_name:
+        imp = extracted.short_path[3:]
+    else:
+        imp = "%s/%s" % (ctx.workspace_name, extracted.short_path)
+    imports = depset(direct = [imp], transitive = [d[PyInfo].imports for d in ctx.attr.deps])
+    transitive_sources = depset(direct = [extracted], transitive = [d[PyInfo].transitive_sources for d in ctx.attr.deps])
+    runfiles = ctx.runfiles(files = [extracted])
+    for d in ctx.attr.deps:
+        runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
     return [
         DefaultInfo(
             files = depset(direct = outputs),
-            runfiles = ctx.runfiles(files = [d]),
+            runfiles = runfiles,
         ),
         WheelInfo(
             distribution = ctx.attr.distribution,
@@ -85,9 +106,10 @@ def _extract_wheel_impl(ctx):
             size = ctx.attr.wheel_size,
         ),
         PyInfo(
-            transitive_sources = depset(direct=[d]),
-            has_py2_only_sources = ctx.attr.python_version == "PY2",
-            has_py3_only_sources = ctx.attr.python_version == "PY3",
+            imports = imports,
+            transitive_sources = transitive_sources,
+            has_py2_only_sources = has_py2_only_sources,
+            has_py3_only_sources = has_py3_only_sources,
         ),
     ]
 
@@ -98,7 +120,8 @@ extract_wheel = rule(
             doc = "A wheel to extract.",
             allow_single_file = [".whl"],
         ),
-        "deps": attr.label_list(default = []),
+        "imports": attr.string_list(),
+        "deps": attr.label_list(providers=[PyInfo]),
         "patches": attr.label_list(default = [], allow_files=True),
         "patch_tool": attr.string(default = "patch"),
         "patch_args": attr.string_list(default = ["-p0"]),

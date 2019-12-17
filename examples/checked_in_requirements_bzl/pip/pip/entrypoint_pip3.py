@@ -1,0 +1,1 @@
+from pip import main as main; main()
