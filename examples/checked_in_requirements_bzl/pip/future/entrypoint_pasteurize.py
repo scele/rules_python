@@ -1,1 +1,0 @@
-from libpasteurize.main import main as main; main()

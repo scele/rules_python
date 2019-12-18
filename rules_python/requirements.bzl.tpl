@@ -39,8 +39,14 @@ def requirement(name, target = "pkg", binary = None):
     key = name.lower()
     if key not in wheels:
         fail("Could not find pip-provided dependency: '%s'" % name)
+    if "%{gendir}" != "{}": # XXX
+        key = name.lower().replace("-", "_")
+        if binary:
+            return "@//%{gendir}/%s/bin:%s" % (key, binary)
+        return "@//%{gendir}/%s:%s" % (key, target)
+
     if binary:
-        return "@%s//:%s" % (wheels[key]["name"], binary)
+        return "@%s//bin:%s" % (wheels[key]["name"], binary)
     return "@%s//:%s" % (wheels[key]["name"], target)
 
 def pip_install():

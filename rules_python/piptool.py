@@ -345,25 +345,27 @@ def genbuild(args):
 
   parser = whl.entrypoints()
   entrypoints_build = ''
+  entrypoints_build2 = ''
   if parser:
       if parser.has_section('console_scripts'):
           for name, location in parser.items('console_scripts'):
               # Assumes it doesn't depend on extras. TODO(conrado): fix
-              entrypoint_file = 'entrypoint_%s.py' % name
-              with open(os.path.join(args.directory, entrypoint_file), 'w') as f:
-                  f.write("""from %s import %s as main; main()""" % tuple(location.split(":")))
+              if not entrypoints_build2:
+                entrypoints_build2 += """\
+load("@io_bazel_rules_python//python:python.bzl", "py_entrypoint_binary")
+load("@{repository}//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+""".format(repository=args.repository)
               attrs = []
               attrs += [("name", '"%s"' % name)]
-              attrs += [("srcs", '["%s"]' % entrypoint_file)]
-              attrs += [("main", '"%s"' % entrypoint_file)]
-              if args.python_version:
-                attrs += [("python_version", '"%s"' % args.python_version)]
-              attrs += [("deps", '[":pkg"]')]
-              entrypoints_build += """
-py_binary(
+              attrs += [("entrypoint", '"%s"' % location)]
+              attrs += [("deps", '[requirement("%s")]' % whl.name())]
+              entrypoints_build2 += """
+py_entrypoint_binary(
     {attrs}
 )
-""".format(attrs=",\n    ".join(['{} = {}'.format(k, v) for k, v in attrs]))
+""".format(attrs="\n    ".join(['{} = {},'.format(k, v) for k, v in attrs]))
 
   attrs = []
   if args.patches:
@@ -374,13 +376,10 @@ py_binary(
     attrs += [("patch_args", '["%s"]' % '", "'.join(args.patch_args))]
   if args.patch_cmds:
     attrs += [("patch_cmds", '["%s"]' % '", "'.join(args.patch_cmds))]
-  attrs += [("distribution", '"%s"' % whl.distribution().lower())]
-  attrs += [("version", '"%s"' % whl.version())]
   if args.wheel_repo:
-    attrs += [("wheel", '"@%s//:%s"' % (args.wheel_repo, whl.basename()))]
+    attrs += [("srcs", '["@%s//:wheel"]' % args.wheel_repo)]
   else:
     attrs += [("wheel", '"%s"' % whl.basename())]
-  attrs += [("wheel_size", "%s" % os.path.getsize(args.whl))]
   if args.python_version:
     attrs += [("python_version", '"%s"' % args.python_version)]
   if external_deps:
@@ -389,6 +388,11 @@ py_binary(
       for d in sorted(external_deps)
     ])
     attrs += [("deps", "[%s\n    ]" % deps)]
+
+  if entrypoints_build2:
+    os.mkdir(os.path.join(args.directory, 'bin'))
+    with open(os.path.join(args.directory, 'bin', 'BUILD'), 'w') as f:
+      f.write(entrypoints_build2)
 
   with open(os.path.join(args.directory, 'BUILD'), 'w') as f:
     f.write("""\
@@ -405,21 +409,21 @@ extract_wheel(
            attrs=",\n    ".join(['{} = {}'.format(k, v) for k, v in attrs]),
     ))
     if args.extras:
-      f.write('\n\n'.join([
-    """py_library(
+      f.write(''.join([
+    """
+py_library(
     name = "{extra}",
     deps = [
         ":pkg",{deps}
     ],
-)""".format(extra=extra,
-            deps=','.join([
-                'requirement("%s")' % dep
+)
+""".format(extra=extra,
+            deps=''.join([
+                '\n        requirement("%s"),' % dep
                 for dep in sorted(whl.dependencies(extra))
               ]))
         for extra in args.extras or []
       ]))
-    if entrypoints_build:
-      f.write(entrypoints_build)
     if contents:
       f.write(contents)
 
@@ -766,22 +770,22 @@ def resolve(args):
         {},
     }},""".format(wheel.name(), ",\n        ".join(['"{}": {}'.format(k, v) for k, v in attrs]))
 
-  if os.path.isdir(args.output):
-    shutil.rmtree(args.output)
-    os.mkdir(args.output)
-    with open(os.path.join(args.output, "BUILD"), "w"): pass
+  if args.output_dir:
+    shutil.rmtree(args.output_dir)
+    os.mkdir(args.output_dir)
+    with open(os.path.join(args.output_dir, "BUILD"), "w"): pass
     for w in whls:
-      buildfile_dir = os.path.join(args.output, w.distribution().lower())
+      buildfile_dir = os.path.join(args.output_dir, w.distribution().lower())
       os.makedirs(buildfile_dir)
       genbuild_args = argparse.Namespace(
         directory=buildfile_dir,
         repository=args.name,
         whl=w.path(),
-        wheel_repo=lib_repo(w),
+        wheel_repo=wheel_repo(w),
         add_dependency=None,
         drop_dependency=None,
         add_build_content=None,
-        extras=None,
+        extras=sorted(possible_extras.get(w, [])),
         python_version=None,
         patches=None,
         patch_tool=None,
@@ -790,27 +794,6 @@ def resolve(args):
       )
       print("Generating BUILD file to %s from %s" % (buildfile_dir, w.path()))
       genbuild(genbuild_args)
-    args.output = os.path.join(args.output, "requirements.bzl")
-
-    #args += ["--whl=%s" % wheel]
-    #args += ["--add-dependency=%s" % d for d in ctx.attr.additional_runtime_deps]
-    #args += ["--drop-dependency=%s" % d for d in ctx.attr.remove_runtime_deps]
-    #if ctx.attr.additional_build_content:
-    #    args += ["--add-build-content=%s" % ctx.path(ctx.attr.additional_build_content)]
-    #args += ["--extras=%s" % extra for extra in ctx.attr.extras]
-    #if ctx.attr.python_version:
-    #    args += ["--python-version=%s" % ctx.attr.python_version]
-    ## Add our sitecustomize.py that ensures all .pth files are run.
-    #args += ["--add-dependency=@io_bazel_rules_python//python:site"]
-    #for x in ctx.attr.patches:
-    #    args += ["--patches=@%s" % x]
-    #if ctx.attr.patch_tool:
-    #    args += ["--patch-tool=%s" % ctx.attr.patch_tool]
-    #for x in ctx.attr.patch_args:
-    #    args += ["--patch-args=%s" % x]
-    #for x in ctx.attr.patch_cmds:
-    #    args += ["--patch-cmds=%s" % x]
-
 
   with open(args.output, 'w') as f:
     f.write("""\
@@ -837,6 +820,9 @@ parser.add_argument('--input', action='append', required=True,
 
 parser.add_argument('--output', action='store', required=True,
                     help=('The requirements.bzl file to export.'))
+
+parser.add_argument('--output-dir', action='store',
+                    help=('The directory under which to generate BUILD files.'))
 
 parser.add_argument('--output-format', choices=['refer', 'download'], default='refer',
                     help=('How whl_library rules should obtain the wheel.'))

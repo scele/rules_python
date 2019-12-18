@@ -26,18 +26,18 @@ sh_binary(
 )
 """)
 
-  if not ctx.attr.gendir:
-    ctx.template(
-        "requirements.bzl",
-        Label("//rules_python:requirements.bzl.tpl"),
-        substitutions = {
-            "%{repo}": ctx.name,
-            "%{python}": str(ctx.attr.python) if ctx.attr.python else "",
-            "%{python_version}": ctx.attr.python_version if ctx.attr.python_version else "",
-            "%{pip_args}": ", ".join(["\"%s\"" % arg for arg in ctx.attr.pip_args]),
-            "%{additional_attributes}": ctx.attr.requirements_overrides or "{}",
-            "%{env}": ", ".join(["\"%s\"" % x for x in ctx.attr.env]),
-        })
+  ctx.template(
+    "requirements.bzl",
+    Label("//rules_python:requirements.bzl.tpl"),
+    substitutions = {
+      "%{repo}": ctx.name,
+      "%{python}": str(ctx.attr.python) if ctx.attr.python else "",
+      "%{python_version}": ctx.attr.python_version if ctx.attr.python_version else "",
+      "%{pip_args}": ", ".join(["\"%s\"" % arg for arg in ctx.attr.pip_args]),
+      "%{additional_attributes}": ctx.attr.requirements_overrides or "{}",
+      "%{gendir}": ctx.attr.gendir or "{}",
+      "%{env}": ", ".join(["\"%s\"" % x for x in ctx.attr.env]),
+    })
 
 
   cmd = [
@@ -54,52 +54,7 @@ sh_binary(
   ]
 
 
-  if ctx.attr.gendir:
-    cmd += [
-        "--output-format=download",
-        "--directory=%s" % str(ctx.path("build-directory")),
-    ]
-    if ctx.attr.digests:
-        cmd += ["--digests"]
-
-    ctx.file(
-        "update.sh",
-        "\n".join([
-            "#!/bin/bash",
-            "set -euo pipefail",
-            "rm -rf \"%s\"" % str(ctx.path("build-directory")),
-            "'%s' --output=$BUILD_WORKSPACE_DIRECTORY/%s \"$@\"" % ("' '".join(cmd), ctx.attr.gendir),
-        ]),
-        executable = True,
-    )
-
-    ctx.file("requirements.bzl", """
-load("@//{prefix}:requirements.bzl", _wheels = "wheels")
-load(
-    "@io_bazel_rules_python//python:whl.bzl",
-    _wheel_rules = "wheel_rules",
-    _download_or_build_wheel = "download_or_build_wheel",
-)
-
-def pip_install():
-    for distribution, attributes in _wheels.items():
-        attrs = {{a: attributes.get(a, None) for a in _wheel_rules.download_or_build_wheel.attrs}}
-        attrs["name"] = attributes["name"]
-        attrs["distribution"] = distribution
-        _download_or_build_wheel(**attrs)
-
-def requirement(name, target = "pkg", binary = None):
-    # Handle extras
-    parts = name.split("[")
-    name = parts[0]
-    if len(parts) > 1:
-        target = parts[1].rstrip("]")
-    key = name.lower().replace("-", "_")
-    if binary:
-        return "//{prefix}/%s:%s" % (key, binary)
-    return "//{prefix}/%s:%s" % (key, target)
-""".format(prefix=ctx.attr.gendir, repo=ctx.attr.name))
-  elif ctx.attr.requirements_bzl:
+  if ctx.attr.requirements_bzl:
     cmd += [
         "--output=%s" % str(ctx.path(ctx.attr.requirements_bzl)),
         "--output-format=download",
@@ -108,12 +63,16 @@ def requirement(name, target = "pkg", binary = None):
     if ctx.attr.digests:
         cmd += ["--digests"]
 
+    gendir_arg = ""
+    if ctx.attr.gendir:
+        gendir_arg = " --output-dir=$BUILD_WORKSPACE_DIRECTORY/%s" % ctx.attr.gendir
+
     ctx.file(
         "update.sh",
         "\n".join([
             "#!/bin/bash",
             "rm -rf \"%s\"" % str(ctx.path("build-directory")),
-            "exec env - %s '%s' \"$@\"" % (" ".join(ctx.attr.env), "' '".join(cmd)),
+            "exec env - %s '%s'%s \"$@\"" % (" ".join(ctx.attr.env), "' '".join(cmd), gendir_arg),
         ]),
         executable = True,
     )
@@ -222,7 +181,7 @@ Args:
 
 def _pip_version_proxy_impl(ctx):
     loads = "".join(["""\
-load("{repo}//:requirements.bzl", wheels_{i} = "wheels")
+load("{repo}//:requirements.bzl", wheels_{i} = "wheels", requirement_{i} = "requirement")
 """.format(repo=ctx.attr.values[k], i=i) for i, k in enumerate(ctx.attr.values.keys())])
 
     gathers = "".join(["""\
@@ -231,20 +190,20 @@ load("{repo}//:requirements.bzl", wheels_{i} = "wheels")
             continue
         if k not in all_reqs:
             all_reqs[k] = {{}}
-        all_reqs[k]["{key}"] = "@%s//:pkg" % v["name"]
+        all_reqs[k]["{key}"] = requirement_{i}(k)
         for e in v.get("extras", []) + v.get("additional_targets", []):
             ek = "%s[%s]" % (k, e)
             if ek not in all_reqs:
                 all_reqs[ek] = {{}}
-            all_reqs[ek]["{key}"] = "@%s//:%s" % (v["name"], e)
-""".format(i=i, key=k) for i, k in enumerate(ctx.attr.values.keys())])
+            all_reqs[ek]["{key}"] = requirement_{i}(ek)
+""".format(i=i, key=k, repo=ctx.attr.values[k]) for i, k in enumerate(ctx.attr.values.keys())])
 
     update_deps = "".join(["""\
-        "{repo}//:update",
+        #"{repo}//:update",
 """.format(repo=v) for v in ctx.attr.values.values()])
 
     update_locations = "".join(["""\
-        "$(location {repo}//:update)",
+        #"$(location {repo}//:update)",
 """.format(repo=v) for v in ctx.attr.values.values()])
 
     ctx.file("BUILD.bazel", content="""\

@@ -14,8 +14,7 @@
 
 WheelInfo = provider(
     fields = {
-        "distribution": "distribution (string)",
-        "version": "version (string)",
+        "wheel": "wheel (File)",
         "size": "size of the wheel in bytes (int)",
     },
 )
@@ -45,14 +44,20 @@ def py_test(*args, **kwargs):
   native.py_test(*args, **kwargs)
 
 def _extract_wheel_impl(ctx):
-    extracted = ctx.actions.declare_directory("extracted")
+    if ctx.attr.srcs:
+        wheelInfo = ctx.attr.srcs[0][WheelInfo]
+        wheel = wheelInfo.wheel
+    else:
+        wheelInfo = WheelInfo()
+        wheel = ctx.file.wheel
+    libdir = ctx.actions.declare_directory("lib")
     command = ["BUILDDIR=$(pwd)"]
-    command += ["%s extract --whl=%s --directory=%s" % (ctx.executable._piptool.path, ctx.file.wheel.path, extracted.path)]
-    inputs = [ctx.file.wheel]
-    outputs = [extracted]
+    command += ["%s extract --whl=%s --directory=%s" % (ctx.executable._piptool.path, wheel.path, libdir.path)]
+    inputs = [wheel]
+    outputs = [libdir]
     tools = [ctx.executable._piptool]
 
-    command += ["cd %s" % extracted.path]
+    command += ["cd %s" % libdir.path]
     for patchfile in ctx.files.patches:
         command += ["{patchtool} {patch_args} < $BUILDDIR/{patchfile}".format(
             patchtool = ctx.attr.patch_tool,
@@ -87,24 +92,21 @@ def _extract_wheel_impl(ctx):
                 has_py3_only_sources = True
                 break
     if ctx.label.workspace_name:
-        imp = extracted.short_path[3:]
+        imp = libdir.short_path[3:]
     else:
-        imp = "%s/%s" % (ctx.workspace_name, extracted.short_path)
-    imports = depset(direct = [imp], transitive = [d[PyInfo].imports for d in ctx.attr.deps])
-    transitive_sources = depset(direct = [extracted], transitive = [d[PyInfo].transitive_sources for d in ctx.attr.deps])
-    runfiles = ctx.runfiles(files = [extracted])
+        imp = "%s/%s" % (ctx.workspace_name, libdir.short_path)
+    imports = depset(direct = [imp], transitive = [d[PyInfo].imports for d in ctx.attr.deps] + [ctx.attr._site[PyInfo].imports])
+    transitive_sources = depset(direct = [libdir], transitive = [d[PyInfo].transitive_sources for d in ctx.attr.deps] + [ctx.attr._site[PyInfo].transitive_sources])
+    runfiles = ctx.runfiles(files = [libdir])
     for d in ctx.attr.deps:
         runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
+    runfiles = runfiles.merge(ctx.attr._site[DefaultInfo].default_runfiles)
     return [
         DefaultInfo(
             files = depset(direct = outputs),
             runfiles = runfiles,
         ),
-        WheelInfo(
-            distribution = ctx.attr.distribution,
-            version = ctx.attr.version,
-            size = ctx.attr.wheel_size,
-        ),
+        wheelInfo,
         PyInfo(
             imports = imports,
             transitive_sources = transitive_sources,
@@ -120,15 +122,16 @@ extract_wheel = rule(
             doc = "A wheel to extract.",
             allow_single_file = [".whl"],
         ),
+        "srcs": attr.label_list(
+            doc = "A wheel to extract.",
+            providers = [WheelInfo],
+        ),
         "imports": attr.string_list(),
         "deps": attr.label_list(providers=[PyInfo]),
         "patches": attr.label_list(default = [], allow_files=True),
         "patch_tool": attr.string(default = "patch"),
         "patch_args": attr.string_list(default = ["-p0"]),
         "patch_cmds": attr.string_list(default = []),
-        "distribution": attr.string(),
-        "version": attr.string(),
-        "wheel_size": attr.int(doc = "wheel size in bytes"),
         "python_version": attr.string(values = ["PY2", "PY3", ""]),
         "_piptool": attr.label(
             allow_files = True,
@@ -136,5 +139,41 @@ extract_wheel = rule(
             default = Label("//tools:piptool.par"),
             cfg = "host",
         ),
+        "_site": attr.label(
+            providers = [PyInfo],
+            default = Label("@io_bazel_rules_python//python:site"),
+        ),
     },
+)
+
+
+def py_entrypoint_binary(name, entrypoint, **kwargs):
+    parts = entrypoint.split(":", 2)
+    entrypoint_name = "_%s.py" % name
+    native.genrule(
+        name = "gen_" + name,
+        outs = [entrypoint_name],
+        cmd = "echo 'import sys; from %s import %s as main; sys.exit(main())' > $@" % (parts[0], parts[1]),
+    )
+    py_binary(
+        name = name,
+        srcs = [entrypoint_name],
+        main = entrypoint_name,
+        **kwargs
+    )
+
+def _prebuilt_wheel_impl(ctx):
+    return [
+        WheelInfo(
+            wheel = ctx.files.srcs[0],
+            size = ctx.attr.size,
+        ),
+    ]
+
+prebuilt_wheel = rule(
+    attrs = {
+        "srcs": attr.label_list(allow_files = [".whl"]),
+        "size": attr.int(),
+    },
+    implementation = _prebuilt_wheel_impl,
 )

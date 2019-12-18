@@ -121,10 +121,21 @@ def _download_or_build_wheel_impl(ctx):
     else:
         _build_wheel(ctx)
 
-    result = ctx.execute(["sh", "-c", "ls ./%s" % ctx.attr.wheel_name])
+    result = ctx.execute(["stat", "--printf=%s", ctx.attr.wheel_name])
     if result.return_code:
         fail("whl not found: %s (%s)" % (result.stdout, result.stderr))
-    ctx.file("BUILD", "exports_files([\"%s\"])" % ctx.attr.wheel_name)
+    ctx.file("BUILD", """\
+load("@io_bazel_rules_python//python:python.bzl", "prebuilt_wheel")
+
+exports_files(["{file}"])
+
+prebuilt_wheel(
+    name = "wheel",
+    srcs = ["{file}"],
+    size = {size},
+    visibility = ["//visibility:public"],
+)
+""".format(file=ctx.attr.wheel_name, size=result.stdout.strip()))
 
 
 _download_or_build_wheel_attrs = {

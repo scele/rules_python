@@ -1,12 +1,12 @@
 absl-py==0.7.0
 backports.functools-lru-cache==1.5
 backports.ssl-match-hostname==3.5.0.1
-horovod==0.13.11
-jsonnet==0.11.2
+#horovod==0.13.11
+#jsonnet==0.11.2
 networkx==2.2
 pandas
 pyhive==0.6.1
-scipy==1.1.0
+#scipy==1.1.0
 sqlalchemy==1.1.15
-tensorflow==1.12.0
+#tensorflow==1.12.0
 wrapt==1.11.1
