@@ -1,11 +1,11 @@
 load("@io_bazel_rules_python//python:python.bzl", "extract_wheel")
-load("@examples_checked_in_requirements_bzl//:requirements.bzl", "requirement")
+load("@examples_checked_in_requirements_bzl//:requirements.bzl", "requirement", "wheel")
 
 package(default_visibility = ["//visibility:public"])
 
 extract_wheel(
-    name = "pkg",
-    srcs = ["@examples_checked_in_requirements_bzl__networkx_2_2_wheel//:wheel"],
+    name = "networkx",
+    srcs = [wheel("networkx")],
     deps = [
         requirement("decorator"),
     ],
@@ -14,8 +14,7 @@ extract_wheel(
 py_library(
     name = "numpy",
     deps = [
-        ":pkg",
-        requirement("decorator"),
+        ":networkx",
         requirement("numpy"),
     ],
 )
@@ -23,8 +22,7 @@ py_library(
 py_library(
     name = "pandas",
     deps = [
-        ":pkg",
-        requirement("decorator"),
+        ":networkx",
         requirement("pandas"),
     ],
 )
