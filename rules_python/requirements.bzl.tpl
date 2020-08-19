@@ -86,6 +86,10 @@ def extract_wheel(wheel, distribution, rule=_extract_wheel, **kwargs):
         **attrs
     )
 
+def wheel(distribution):
+    w = wheels[distribution]
+    return "@%s_wheel//:wheel" % w["name"]
+
 info = struct(
     wheels = wheels,
     download_or_build_wheel = download_or_build_wheel,

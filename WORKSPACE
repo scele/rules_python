@@ -129,53 +129,53 @@ http_file(
 )
 
 # Imports for examples
-pip_import(
-    name = "examples_helloworld",
-    requirements = ["//examples/helloworld:requirements.txt"],
-)
-
-load(
-    "@examples_helloworld//:requirements.bzl",
-    _helloworld_install = "pip_install",
-)
-
-_helloworld_install()
-
-pip_import(
-    name = "examples_version",
-    requirements = ["//examples/version:requirements.txt"],
-)
-
-load(
-    "@examples_version//:requirements.bzl",
-    _version_install = "pip_install",
-)
-
-_version_install()
-
-pip_import(
-    name = "examples_boto",
-    requirements = ["//examples/boto:requirements.txt"],
-)
-
-load(
-    "@examples_boto//:requirements.bzl",
-    _boto_install = "pip_install",
-)
-
-_boto_install()
-
-pip_import(
-    name = "examples_extras",
-    requirements = ["//examples/extras:requirements.txt"],
-)
-
-load(
-    "@examples_extras//:requirements.bzl",
-    _extras_install = "pip_install",
-)
-
-_extras_install()
+#pip_import(
+#    name = "examples_helloworld",
+#    requirements = ["//examples/helloworld:requirements.txt"],
+#)
+#
+#load(
+#    "@examples_helloworld//:requirements.bzl",
+#    _helloworld_install = "pip_install",
+#)
+#
+#_helloworld_install()
+#
+#pip_import(
+#    name = "examples_version",
+#    requirements = ["//examples/version:requirements.txt"],
+#)
+#
+#load(
+#    "@examples_version//:requirements.bzl",
+#    _version_install = "pip_install",
+#)
+#
+#_version_install()
+#
+#pip_import(
+#    name = "examples_boto",
+#    requirements = ["//examples/boto:requirements.txt"],
+#)
+#
+#load(
+#    "@examples_boto//:requirements.bzl",
+#    _boto_install = "pip_install",
+#)
+#
+#_boto_install()
+#
+#pip_import(
+#    name = "examples_extras",
+#    requirements = ["//examples/extras:requirements.txt"],
+#)
+#
+#load(
+#    "@examples_extras//:requirements.bzl",
+#    _extras_install = "pip_install",
+#)
+#
+#_extras_install()
 
 wheel_overrides = {
     "nvidia-ml-py": {
