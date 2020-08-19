@@ -1,5 +1,5 @@
-load("@rules_python//python:python.bzl", "py_entrypoint_binary")
 load("@examples_checked_in_requirements_bzl//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_entrypoint_binary")
 
 package(default_visibility = ["//visibility:public"])
 

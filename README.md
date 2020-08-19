@@ -38,7 +38,7 @@ Then in your `BUILD` files load the python rules with:
 
 ``` python
 load(
-  "@rules_python//python:python.bzl",
+  "@rules_python//python:defs.bzl",
   "py_binary", "py_library", "py_test",
 )
 

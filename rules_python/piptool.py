@@ -363,7 +363,7 @@ py_entrypoint_binary(
   # If something got generated, add header.
   if entrypoints_build2:
     entrypoints_build2 = """\
-load("@rules_python//python:python.bzl", "py_entrypoint_binary")
+load("@rules_python//python:defs.bzl", "py_entrypoint_binary")
 
 package(default_visibility = ["//visibility:public"])
 """ + entrypoints_build2
@@ -401,7 +401,7 @@ load("@{repository}//:requirements.bzl", "requirement")
 
   with open(os.path.join(args.directory, 'BUILD'), 'w') as f:
     contents = """\
-load("@rules_python//python:python.bzl", "extract_wheel")
+load("@rules_python//python:defs.bzl", "extract_wheel")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -785,7 +785,10 @@ def resolve(args):
     }},""".format(wheel.name(), ",\n        ".join(['"{}": {}'.format(k, v) for k, v in attrs]))
 
   if args.output_dir:
-    os.makedirs(args.output_dir, exist_ok=True)
+    try:
+      os.makedirs(args.output_dir)
+    except Exception:
+      pass
     _, subdirs, _ = next(os.walk(args.output_dir))
     for subdir in subdirs:
       shutil.rmtree(os.path.join(args.output_dir, subdir))

@@ -32,7 +32,7 @@ skylark_library(
 
 skylark_library(
     name = "python",
-    srcs = ["//python:python.bzl"],
+    srcs = ["//python:defs.bzl"],
 )
 
 skylark_doc(

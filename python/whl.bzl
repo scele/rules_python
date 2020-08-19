@@ -125,7 +125,7 @@ def _download_or_build_wheel_impl(ctx):
     if result.return_code:
         fail("whl not found: %s (%s)" % (result.stdout, result.stderr))
     ctx.file("BUILD", """\
-load("@rules_python//python:python.bzl", "prebuilt_wheel")
+load("@rules_python//python:defs.bzl", "prebuilt_wheel")
 
 exports_files(["{file}"])
 

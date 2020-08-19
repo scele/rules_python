@@ -17,6 +17,7 @@ licenses(["notice"])  # Apache 2.0
 
 exports_files([
     "pip.bzl",
+    "defs.bzl",
     "python.bzl",
     "whl.bzl",
     "__init__.py",
