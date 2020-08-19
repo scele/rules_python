@@ -352,7 +352,7 @@ def genbuild(args):
               # Assumes it doesn't depend on extras. TODO(conrado): fix
               if not entrypoints_build2:
                 entrypoints_build2 += """\
-load("@io_bazel_rules_python//python:python.bzl", "py_entrypoint_binary")
+load("@rules_python//python:python.bzl", "py_entrypoint_binary")
 load("@{repository}//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
@@ -396,7 +396,7 @@ py_entrypoint_binary(
 
   with open(os.path.join(args.directory, 'BUILD'), 'w') as f:
     f.write("""\
-load("@io_bazel_rules_python//python:python.bzl", "extract_wheel")
+load("@rules_python//python:python.bzl", "extract_wheel")
 load("@{repository}//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])

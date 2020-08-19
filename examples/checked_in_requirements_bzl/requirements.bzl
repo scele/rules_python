@@ -102,12 +102,12 @@ wheels = {
         "name": "examples_checked_in_requirements_bzl__SQLAlchemy_1_1_15",
         "version": "1.1.15",
         "wheel_name": "SQLAlchemy-1.1.15-cp27-cp27mu-linux_x86_64.whl",
-        "sha256": "68952447df8ce99c9695a94a3f60d1a06f54b25e208328325396e2f5889dfc91",
+        "sha256": "c74d4fd2a091a82da98b42c6f464aa40bb9cbdba888aee5c545e1dd65a661130",
     },
     "wrapt": {
         "name": "examples_checked_in_requirements_bzl__wrapt_1_11_1",
         "version": "1.11.1",
-        "wheel_name": "wrapt-1.11.1-cp27-cp27mu-linux_x86_64.whl",
-        "sha256": "f770e5460bda2df6ba5dc97d5ca405e5cadff85934db6604d683ad353d17796b",
+        "wheel_name": "wrapt-1.11.1-py2-none-any.whl",
+        "sha256": "43fd1c8909bc46ffa205771503aa8fc64ad46bb07db38c8b52ba008d793f43f3",
     },
 }

@@ -141,7 +141,7 @@ extract_wheel = rule(
         ),
         "_site": attr.label(
             providers = [PyInfo],
-            default = Label("@io_bazel_rules_python//python:site"),
+            default = Label("@rules_python//python:site"),
         ),
     },
 )

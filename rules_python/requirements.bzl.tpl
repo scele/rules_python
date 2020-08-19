@@ -1,6 +1,6 @@
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 load(
-    "@io_bazel_rules_python//python:whl.bzl",
+    "@rules_python//python:whl.bzl",
     _wheel_rules = "wheel_rules",
     _download_or_build_wheel = "download_or_build_wheel",
     _extract_wheel = "extract_wheel",

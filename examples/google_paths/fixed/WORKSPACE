@@ -2,11 +2,11 @@ workspace(name = "example")
 
 # PIP => bazel transition
 local_repository(
-    name = "io_bazel_rules_python",
+    name = "rules_python",
     path = "../../.."
 )
 
-load("@io_bazel_rules_python//python:pip.bzl", "pip_repositories", "pip_import")
+load("@rules_python//python:pip.bzl", "pip_repositories", "pip_import")
 pip_repositories()
 
 pip_import(

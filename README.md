@@ -22,14 +22,14 @@ Add the following to your `WORKSPACE` file to add the external repositories:
 
 ```python
 git_repository(
-    name = "io_bazel_rules_python",
+    name = "rules_python",
     remote = "https://github.com/bazelbuild/rules_python.git",
     # NOT VALID!  Replace this with a Git commit SHA.
     commit = "{HEAD}",
 )
 
 # Only needed for PIP support:
-load("@io_bazel_rules_python//python:pip.bzl", "pip_repositories")
+load("@rules_python//python:pip.bzl", "pip_repositories")
 
 pip_repositories()
 ```
@@ -38,7 +38,7 @@ Then in your `BUILD` files load the python rules with:
 
 ``` python
 load(
-  "@io_bazel_rules_python//python:python.bzl",
+  "@rules_python//python:python.bzl",
   "py_binary", "py_library", "py_test",
 )
 
@@ -56,7 +56,7 @@ are imported into the Bazel dependency graph via a two-phased process in
 `WORKSPACE`:
 
 ```python
-load("@io_bazel_rules_python//python:pip.bzl", "pip_import")
+load("@rules_python//python:pip.bzl", "pip_import")
 
 # This rule translates the specified requirements.txt into
 # @my_deps//:requirements.bzl, which itself exposes a pip_install method.

@@ -47,7 +47,7 @@ def _extract_wheel(ctx, wheel):
         args += ["--python-version=%s" % ctx.attr.python_version]
 
     # Add our sitecustomize.py that ensures all .pth files are run.
-    args += ["--add-dependency=@io_bazel_rules_python//python:site"]
+    args += ["--add-dependency=@rules_python//python:site"]
 
     for x in ctx.attr.patches:
         args += ["--patches=@%s" % x]
@@ -125,7 +125,7 @@ def _download_or_build_wheel_impl(ctx):
     if result.return_code:
         fail("whl not found: %s (%s)" % (result.stdout, result.stderr))
     ctx.file("BUILD", """\
-load("@io_bazel_rules_python//python:python.bzl", "prebuilt_wheel")
+load("@rules_python//python:python.bzl", "prebuilt_wheel")
 
 exports_files(["{file}"])
 
