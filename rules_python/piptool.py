@@ -336,12 +336,12 @@ def genbuild(args):
 
   external_deps = {d for d in itertools.chain(whl.dependencies(), extra_deps) if d not in drop_deps}
 
-  contents = []
+  additional_contents = []
   add_build_content = args.add_build_content or []
   for name in add_build_content:
       with open(name) as f:
-          contents.append(f.read() + '\n')
-  contents = '\n'.join(contents)
+          additional_contents.append(f.read() + '\n')
+  additional_contents = '\n'.join(additional_contents)
 
   parser = whl.entrypoints()
   entrypoints_build = ''
@@ -350,13 +350,6 @@ def genbuild(args):
       if parser.has_section('console_scripts'):
           for name, location in parser.items('console_scripts'):
               # Assumes it doesn't depend on extras. TODO(conrado): fix
-              if not entrypoints_build2:
-                entrypoints_build2 += """\
-load("@rules_python//python:python.bzl", "py_entrypoint_binary")
-load("@{repository}//:requirements.bzl", "requirement")
-
-package(default_visibility = ["//visibility:public"])
-""".format(repository=args.repository)
               attrs = []
               attrs += [("name", '"%s"' % name)]
               attrs += [("entrypoint", '"%s"' % location)]
@@ -366,6 +359,18 @@ py_entrypoint_binary(
     {attrs}
 )
 """.format(attrs="\n    ".join(['{} = {},'.format(k, v) for k, v in attrs]))
+
+  # If something got generated, add header.
+  if entrypoints_build2:
+    entrypoints_build2 = """\
+load("@rules_python//python:python.bzl", "py_entrypoint_binary")
+
+package(default_visibility = ["//visibility:public"])
+""" + entrypoints_build2
+    if "requirement(" in entrypoints_build2:
+      entrypoints_build2 = """\
+load("@{repository}//:requirements.bzl", "requirement")
+""".format(repository=args.repository) + entrypoints_build2
 
   attrs = []
   if args.patches:
@@ -395,9 +400,8 @@ py_entrypoint_binary(
       f.write(entrypoints_build2)
 
   with open(os.path.join(args.directory, 'BUILD'), 'w') as f:
-    f.write("""\
+    contents = """\
 load("@rules_python//python:python.bzl", "extract_wheel")
-load("@{repository}//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -408,9 +412,9 @@ extract_wheel(
 """.format(name=whl.distribution().lower(),
            repository=args.repository,
            attrs=",\n    ".join(['{} = {}'.format(k, v) for k, v in attrs]),
-    ))
+    )
     if args.extras:
-      f.write(''.join([
+      contents += ''.join([
     """
 py_library(
     name = "{extra}",
@@ -426,9 +430,16 @@ py_library(
                 if dep not in external_deps
               ]))
         for extra in args.extras or []
-      ]))
-    if contents:
-      f.write(contents)
+      ])
+    if additional_contents:
+      contents += additional_contents
+
+    if "requirement(" in contents:
+      contents = """\
+load("@{repository}//:requirements.bzl", "requirement")
+""".format(repository=args.repository) + contents
+
+    f.write(contents)
 
 parser = subparsers.add_parser('genbuild', help='Extract one or more wheels as a py_library')
 parser.set_defaults(func=genbuild)
@@ -687,7 +698,7 @@ def resolve(args):
   try:
     with open(args.output, 'r') as f:
       contents = f.read()
-      contents = re.sub(r"^wheels = ", "", contents, flags=re.MULTILINE)
+      contents = re.sub(r".*^wheels = ", "", contents, flags=re.DOTALL|re.MULTILINE)
       # Need to use literal_eval, since this is bzl, not json (trailing commas, comments).
       wheel_info = ast.literal_eval(contents)
       wheel_digests.update({k: v["sha256"] for k, v in wheel_info.items() if "sha256" in v})
@@ -752,18 +763,18 @@ def resolve(args):
   def whl_library(wheel):
     attrs = []
     attrs += [("name", quote(lib_repo(wheel)))]
-    attrs += [("version", quote(wheel.version()))]
-    attrs += [("wheel_name", quote(wheel.basename()))]
+    extras = ', '.join([quote(extra) for extra in sorted(possible_extras.get(wheel, []))])
+    if extras != '':
+      attrs += [("extras", '[{}]'.format(extras))]
     if args.digests:
       attrs += [("sha256", quote(wheel_digests[wheel.name()]))]
     url = downloaded_wheel_urls.get(wheel.basename(), None)
     if url:
       attrs += [("urls", '[{}]'.format(quote(url)))]
+    attrs += [("version", quote(wheel.version()))]
+    attrs += [("wheel_name", quote(wheel.basename()))]
     if args.output_format != 'download':
       attrs += [("wheel", '"@{}//:{}"'.format(args.name, wheel.basename()))]
-    extras = ', '.join([quote(extra) for extra in sorted(possible_extras.get(wheel, []))])
-    if extras != '':
-      attrs += [("extras", '[{}]'.format(extras))]
     build_deps = {w.name() for w in transitive_build_deps(wheel, build_info)}
     build_deps = ', '.join([quote(dep) for dep in sorted(build_deps)])
     if build_deps != '':
@@ -774,8 +785,10 @@ def resolve(args):
     }},""".format(wheel.name(), ",\n        ".join(['"{}": {}'.format(k, v) for k, v in attrs]))
 
   if args.output_dir:
-    shutil.rmtree(args.output_dir)
-    os.mkdir(args.output_dir)
+    os.makedirs(args.output_dir, exist_ok=True)
+    _, subdirs, _ = next(os.walk(args.output_dir))
+    for subdir in subdirs:
+      shutil.rmtree(os.path.join(args.output_dir, subdir))
     with open(os.path.join(args.output_dir, "BUILD"), "w"): pass
     for w in whls:
       buildfile_dir = os.path.join(args.output_dir, w.distribution().lower())
@@ -799,9 +812,8 @@ def resolve(args):
       genbuild(genbuild_args)
 
   with open(args.output, 'w') as f:
-    f.write("""\
-# Install pip requirements.
-#
+    f.write('""" Install pip requirements. """' + """
+
 {comment}
 wheels = {{
     {wheels}
