@@ -334,7 +334,7 @@ def genbuild(args):
   extra_deps = args.add_dependency or []
   drop_deps = {d: None for d in args.drop_dependency or []}
 
-  external_deps = [d for d in itertools.chain(whl.dependencies(), extra_deps) if d not in drop_deps]
+  external_deps = {d for d in itertools.chain(whl.dependencies(), extra_deps) if d not in drop_deps}
 
   contents = []
   add_build_content = args.add_build_content or []
@@ -402,10 +402,11 @@ load("@{repository}//:requirements.bzl", "requirement")
 package(default_visibility = ["//visibility:public"])
 
 extract_wheel(
-    name = "pkg",
+    name = "{name}",
     {attrs},
 )
-""".format(repository=args.repository,
+""".format(name=whl.distribution().lower(),
+           repository=args.repository,
            attrs=",\n    ".join(['{} = {}'.format(k, v) for k, v in attrs]),
     ))
     if args.extras:
@@ -414,13 +415,15 @@ extract_wheel(
 py_library(
     name = "{extra}",
     deps = [
-        ":pkg",{deps}
+        ":{name}",{deps}
     ],
 )
-""".format(extra=extra,
+""".format(name=whl.distribution().lower(),
+           extra=extra,
             deps=''.join([
                 '\n        requirement("%s"),' % dep
                 for dep in sorted(whl.dependencies(extra))
+                if dep not in external_deps
               ]))
         for extra in args.extras or []
       ]))

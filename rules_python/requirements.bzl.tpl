@@ -30,7 +30,7 @@ def _merged_wheels():
 
 wheels = _merged_wheels()
 
-def requirement(name, target = "pkg", binary = None):
+def requirement(name, target = None, binary = None):
     # Handle extras
     parts = name.split("[")
     name = parts[0]
@@ -39,6 +39,8 @@ def requirement(name, target = "pkg", binary = None):
     key = name.lower()
     if key not in wheels:
         fail("Could not find pip-provided dependency: '%s'" % name)
+    if target == None:
+        target = name.lower().replace("-", "_")
     if "%{gendir}" != "{}": # XXX
         key = name.lower().replace("-", "_")
         if binary:
